@@ -18,6 +18,34 @@ def computeStrain(u, v): #Compute os , setting t=1 to maximize the sensitivity o
     return os
 
 def preProcess(img1, img2, shape):
+    #Left Eye
+    x11=max(shape.part(36).x - 15, 0)
+    y11=shape.part(36).y 
+    x12=shape.part(37).x 
+    y12=max(shape.part(37).y - 15, 0)
+    x13=shape.part(38).x 
+    y13=max(shape.part(38).y - 15, 0)
+    x14=min(shape.part(39).x + 15, 128)
+    y14=shape.part(39).y 
+    x15=shape.part(40).x 
+    y15=min(shape.part(40).y + 15, 128)
+    x16=shape.part(41).x 
+    y16=min(shape.part(41).y + 15, 128)
+            
+    #Right Eye
+    x21=max(shape.part(42).x - 15, 0)
+    y21=shape.part(42).y 
+    x22=shape.part(43).x 
+    y22=max(shape.part(43).y - 15, 0)
+    x23=shape.part(44).x 
+    y23=max(shape.part(44).y - 15, 0)
+    x24=min(shape.part(45).x + 15, 128)
+    y24=shape.part(45).y 
+    x25=shape.part(46).x 
+    y25=min(shape.part(46).y + 15, 128)
+    x26=shape.part(47).x 
+    y26=min(shape.part(47).y + 15, 128)
+            
     # ROI 1 (Left Eyebrow)
     x31=max(shape.part(17).x - 12, 0) #3
     y32=max(shape.part(19).y - 12, 0)
@@ -36,8 +64,13 @@ def preProcess(img1, img2, shape):
     x53=min(shape.part(64).x + 12, 128)
     y54=min(shape.part(57).y + 12, 128)
 
+    #Nose landmark
+    x61=shape.part(28).x
+    y61=shape.part(28).y
+
     # Compute Optical Flow Features
-    optical_flow = cv2.optflow.DualTVL1OpticalFlow_create()
+    #optical_flow = cv2.optflow.DualTVL1OpticalFlow_create()
+    optical_flow = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_MEDIUM)
     flow = optical_flow.calc(img1, img2, None)
     magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1]) 
     u, v = pol2cart(magnitude, angle)
@@ -49,6 +82,19 @@ def preProcess(img1, img2, shape):
     final[:,:,1] = v
     final[:,:,2] = os
     
+    
+    #Remove global head movement by minus nose region
+    final[:, :, 0] = abs(final[:, :, 0] - final[y61-5:y61+6, x61-5:x61+6, 0].mean())
+    final[:, :, 1] = abs(final[:, :, 1] - final[y61-5:y61+6, x61-5:x61+6, 1].mean())
+    final[:, :, 2] = final[:, :, 2] - final[y61-5:y61+6, x61-5:x61+6, 2].mean()
+        
+    #Eye masking
+    left_eye = [(x11, y11), (x12, y12), (x13, y13), (x14, y14), (x15, y15), (x16, y16)]
+    right_eye = [(x21, y21), (x22, y22), (x23, y23), (x24, y24), (x25, y25), (x26, y26)]
+    cv2.fillPoly(final, [np.array(left_eye)], 0)
+    cv2.fillPoly(final, [np.array(right_eye)], 0)
+        
+
     # Normalize the image
     for channel in range(3):
         final[:,:,channel] = cv2.normalize(final[:,:,channel], None, alpha=0, beta=1,norm_type=cv2.NORM_MINMAX)    
@@ -62,7 +108,7 @@ def preProcess(img1, img2, shape):
 
 def feature_extraction_recognition(dataset_name, final_images, final_samples):
     # Get dlib landmark detection file
-    predictor_model = "Utils\\shape_predictor_68_face_landmarks.dat"
+    predictor_model = "Utils/shape_predictor_68_face_landmarks.dat"
     face_pose_predictor = dlib.shape_predictor(predictor_model)
 
     final_videos_samples = [videos for subjects in final_samples for videos in subjects]
@@ -128,7 +174,7 @@ def feature_extraction_recognition(dataset_name, final_images, final_samples):
 
 def feature_extraction_spotting(dataset_name, final_images, k):
     # Get dlib landmark detection file
-    predictor_model = "Utils\\shape_predictor_68_face_landmarks.dat"
+    predictor_model = "Utils/shape_predictor_68_face_landmarks.dat"
     face_pose_predictor = dlib.shape_predictor(predictor_model)
 
     print('Running')
