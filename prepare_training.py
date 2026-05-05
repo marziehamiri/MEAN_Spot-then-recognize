@@ -1,7 +1,8 @@
 import numpy as np
 from tensorflow.keras.utils import to_categorical
 
-def spotting_pseudo_labeling(dataset_name, final_samples, final_dataset_spotting, k_p):
+#old
+def spotting_pseudo_labeling_1(dataset_name, final_samples, final_dataset_spotting, k_p):
     pseudo_y = [] #Pseudolabel spotting [0,1]
     video_count = 0 
 
@@ -28,6 +29,35 @@ def spotting_pseudo_labeling(dataset_name, final_samples, final_dataset_spotting
     print(dataset_name, 'Total frames:', len(pseudo_y))
     return pseudo_y
 
+#new
+def spotting_pseudo_labeling(dataset_name, final_samples, final_dataset_spotting, k_p, iou_threshold=0.2):
+    pseudo_y = []  # Pseudolabel spotting [0,1]
+    video_count = 0 
+
+    for subject_index, subject in enumerate(final_samples):
+        for video_index, video in enumerate(subject):
+            samples_arr = []
+            if len(video) == 0:
+                pseudo_y.append([0 for _ in range(len(final_dataset_spotting[video_count]))])
+            else:
+                pseudo_y_each = [0] * len(final_dataset_spotting[video_count])
+                for ME_index, ME in enumerate(video):
+                    samples_arr.append(np.arange(ME[0], ME[2] + 1))
+                for ground_truth_arr in samples_arr:
+                    for index in range(len(pseudo_y_each)):
+                        pseudo_arr = np.arange(index, index + k_p)
+                        # شرط جدید: اگر IoU > iou_threshold بود 1 شود
+                        iou = len(np.intersect1d(pseudo_arr, ground_truth_arr)) / len(np.union1d(pseudo_arr, ground_truth_arr))
+                        if iou > iou_threshold:
+                            pseudo_y_each[index] = 1
+                pseudo_y.append(pseudo_y_each)
+            video_count += 1
+    # Integrate all videos into one dataset
+    pseudo_y = [y for x in pseudo_y for y in x]
+    print(dataset_name, 'Total frames:', len(pseudo_y))
+    return pseudo_y
+
+
 def recognition_label(dataset_name, emotion_class, final_samples, final_emotions, final_dataset_spotting, final_dataset_recognition, pseudo_y):
     # Detect only the highest peak or all peaks above threshold p
     if(dataset_name == 'CASME_sq' or dataset_name == 'SAMMLV'): 
@@ -37,7 +67,7 @@ def recognition_label(dataset_name, emotion_class, final_samples, final_emotions
         
     # Determine the emotions used for evaluation
     if (dataset_name == 'CASME_sq' or dataset_name == 'SAMMLV'):
-        emotion_list = ['negative', 'positive', 'surprise']
+        emotion_list = ['negative', 'positive', 'surprise','others']
     else:
         emotion_list = ['repression', 'anger', 'contempt', 'disgust', 'fear', 'sadness', 'negative', 'happiness', 'positive', 'surprise', 'others', 'other']
 
@@ -70,6 +100,7 @@ def recognition_label(dataset_name, emotion_class, final_samples, final_emotions
         y1 = [0 if ele=='negative' else ele for ele in y1]
         y1 = [1 if ele=='positive' else ele for ele in y1]
         y1 = [2 if ele=='surprise' else ele for ele in y1]
+        y1 = [3 if ele=='others' else ele for ele in y1]
 
     all_images = [frame for video in final_dataset_spotting for frame in video]
     X = features_split(all_images) # For spotting training
