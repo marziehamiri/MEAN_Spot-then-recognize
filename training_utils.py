@@ -14,7 +14,206 @@ def smooth(y, box_pts):
     y_smooth = np.convolve(y, box, mode='same')
     return y_smooth
 
-def spotting(result, total_gt_spot, subject_count, p, metric_final, spot_multiple, k_p, final_samples, final_dataset_spotting):
+def merge_lists(*lists):
+    return [list(item) for item in zip(*lists)]
+
+def update_preds_for_video(result_merge_micro, subject_index, video_index, preds):
+    """
+    Updates the predictions for a specific video of a subject in result_merge_micro.
+    
+    Args:
+        result_merge_micro (list): The main list containing subject entries.
+        subject_index (int): The index of the subject being processed.
+        video_index (int): The index of the video within that subject.
+        preds (list): The predictions generated for this specific video.
+    
+    Returns:
+        None (Modifies result_merge_micro in-place)
+    """
+    # Initialize third element if not present
+    if len(result_merge_micro[subject_index]) < 3:
+        result_merge_micro[subject_index].append([[] for _ in result_merge_micro[subject_index][1]])
+
+    # Append predictions to the correct video index
+    result_merge_micro[subject_index][2][video_index].extend(preds)
+
+def filter_micro_predictions(micro_predictions, macro_predictions,subject_index, video_index,resul_merge_micro_gt):
+    """
+    حذف پیش‌بینی‌های میکرو که در محدوده ماکرو قرار دارند.
+    
+    :param micro_predictions: لیستی از لیست‌های [subject, [videos], [[start, 0, end, 0, 0, 0], ...]] برای میکرو-اکسپریشن‌ها
+    :param macro_predictions: لیستی از لیست‌های [subject, [videos], [[[start, end], ...]]] برای ماکرو-اکسپریشن‌ها
+    :return: لیستی از بازه‌های فیلتر شده
+    """
+    # استخراج بازه‌های (subject, video, start, end) از ماکروها
+    flattened_macro_predictions = []
+    for macro in macro_predictions:
+        macro_subject = macro[0]
+        macro_videos = macro[1]
+        macro_intervals = macro[2]
+        
+        for video_idx, video in enumerate(macro_videos):
+            for start_end in macro_intervals[video_idx]:
+                macro_start = start_end[0]
+                macro_end = start_end[1]
+                flattened_macro_predictions.append(
+                    (macro_subject, video, macro_start - 10, macro_end + 10)
+                )
+    
+    # حذف پیش‌بینی‌های میکرو در صورت وجود همپوشانی
+    filtered_video_intervals = []
+    
+    micro_subject = micro_predictions[subject_index][0]
+    micro_video = micro_predictions[subject_index][1][video_index]
+    micro_intervals = micro_predictions[subject_index][2][video_index]
+
+    micro_gt = resul_merge_micro_gt[subject_index][2][video_index]
+    
+    print("micro_subject")
+    print(micro_subject)
+
+    print("micro_video")
+    print(micro_video)
+
+    print("micro_intervals")   
+    print(micro_intervals)
+    
+    
+    for interval in micro_intervals:
+        micro_start = interval[0]
+        micro_end = interval[2]
+
+        # Check overlap with macro predictions
+        overlaps_with_macro = any(
+        micro_subject == macro_subject and
+        micro_video == macro_video and
+        (
+            (micro_start >= macro_start and micro_end <= macro_end) or
+            (micro_start <= macro_end and micro_end >= macro_start)
+        )
+        for macro_subject, macro_video, macro_start, macro_end in flattened_macro_predictions
+    )
+
+        # Check overlap with micro ground truth
+        overlaps_with_micro_gt = any(
+        (
+            (micro_start >= gt[0] and micro_end <= gt[1]) or
+            (micro_start <= gt[1] and micro_end >= gt[0])
+        )
+        for gt in micro_gt
+    )
+
+        # Final logic: skip if overlaps with macro AND not with micro_gt
+        should_skip = overlaps_with_macro and not overlaps_with_micro_gt
+
+        if not should_skip:
+            filtered_video_intervals.append(interval)
+
+    if len(filtered_video_intervals) == 0:
+        filtered_video_intervals.append(micro_intervals[0]) 
+        filtered_video_intervals = np.array(filtered_video_intervals)
+
+    return filtered_video_intervals
+
+def compute_iou(pred, gt):
+    """Compute IoU between two intervals."""
+    inter_start = max(pred[0], gt[0])
+    inter_end = min(pred[1], gt[1])
+    intersection = max(0, inter_end - inter_start)
+
+    union = (pred[1] - pred[0]) + (gt[1] - gt[0]) - intersection
+    return intersection / union if union > 0 else 0
+
+def match_predictions_iou(preds, gts, subject_index, video_index, iou_thresh=0.5):
+
+     # استخراج بازه‌های (subject, video, start, end) از ماکروها
+    gt_predictions = []
+    for gtt in gts:
+        gt_subject = gtt[0]
+        gt_videos = gtt[1]
+        gt_intervals = gtt[2]
+        
+        for video_idx, video in enumerate(gt_videos):
+            for start_end in gt_intervals[video_idx]:
+                gt_start = start_end[0]
+                gt_end = start_end[1]
+                gt_predictions.append(
+                    (gt_subject, video, gt_start-10 , gt_end+10 )
+                )
+
+    preds_subject = preds[subject_index][0]
+    preds_video = preds[subject_index][1][video_index]
+    preds_intervals = preds[subject_index][2][video_index]
+
+    print("preds_subject")
+    print(preds_subject)
+
+    print("preds_video")
+    print(preds_video)
+
+    print("preds_intervals")   
+    print(preds_intervals)
+
+    matched_preds = []
+    matched_indices = set()
+
+    for pred in preds_intervals:
+        pred_start = pred[0]
+        pred_end = pred[2]
+        best_pred = None
+        
+        
+
+        for gt_subject, video, gt_start , gt_end in gt_predictions:
+            if(preds_subject == gt_subject and preds_video == video):
+                iou = compute_iou((pred_start,pred_end), (gt_start , gt_end))
+                if iou >= iou_thresh:
+                    best_pred = pred
+                    
+
+        if best_pred:
+            matched_preds.append(best_pred)
+
+    if len(matched_preds) == 0:
+        matched_preds.append(preds_intervals[0]) 
+        matched_preds = np.array(matched_preds)        
+
+    return matched_preds
+
+#micro successful filtering
+def smart_micro_filter_confidence(predictions, max_gap=10):
+    for p in predictions:
+        p[0] = int(p[0])  # start
+        p[2] = int(p[2])  # end
+    if len(predictions) == 0:
+        return np.array([])
+
+    # هر بازه: (start, end, کل بازه)
+    intervals = [(p[0], p[2], p) for p in predictions]
+    intervals.sort(key=lambda x: x[0])  # مرتب بر اساس start
+
+    result = [intervals[0][2]]  # اولین بازه
+
+    for i in range(1, len(intervals)):
+        last = result[-1]        # آخرین بازه نهایی
+        curr = intervals[i][2]   # بازه فعلی
+
+        # اگر همپوشانی داشته باشند
+        if curr[0] <= last[2]:
+            # انتخاب بازه با confidence بالاتر
+            if curr[-1] > last[-1]:
+                result[-1] = curr  # جایگزین
+            # اگر confidence برابر یا کمتر بود، هیچ کاری نکن
+        else:
+            result.append(curr)
+
+        if len(result) == 0:
+            result.append(intervals[0])
+
+    return np.array(result)
+
+
+def spotting(result, total_gt_spot, subject_count, p, metric_final, spot_multiple, k_p, final_samples, final_dataset_spotting,result_merge_micro,result_merge_micro_2,result_merge_macro,resul_merge_micro_gt):
     prev=0
     pred_subject = []
     gt_subject = []
@@ -38,10 +237,21 @@ def spotting(result, total_gt_spot, subject_count, p, metric_final, spot_multipl
             if(len(peaks)==0): #Occurs when no peak is detected, simply give a value to pass the exception in mean_average_precision
                 preds.append([0, 0, 0, 0, 0, 0, 0]) 
             for peak in peaks:
+                #confidence = float(result[peak-k_p:peak+k_p, 0].mean())
+                #preds.append([peak+k_p, 0, peak+k_p, 0, 0, 0,peak, confidence]) 
                 preds.append([peak-k_p, 0, peak+k_p, 0, 0, 0, peak]) #Extend left and right side of peak by k frames
         else:
             peak = np.where(score_plot_agg == max(score_plot_agg))[0][0]
             preds.append([peak-k_p, 0, peak+k_p, 0, 0, 0, peak])  
+
+        #print("preds before postprocessing")
+        #print(preds)
+        #preds = smart_micro_filter_confidence(preds, max_gap=10)
+        #print("preds after smart postprocessing : ")
+        #print(preds)
+
+        #preds = np.array(preds)[:, :7]
+
         for samples in video: 
             gt.append([samples[0], 0, samples[2], 0, 0, 0, 0, samples[1]])
             total_gt_spot += 1
@@ -56,7 +266,7 @@ def spotting(result, total_gt_spot, subject_count, p, metric_final, spot_multipl
         gt_subject.append(gt)
     return pred_subject, gt_subject, total_gt_spot, metric_video, metric_final
 
-def confusionMatrix(gt, pred, show=False):
+def confusionMatrix(gt, pred, show=True):
     TN_recog, FP_recog, FN_recog, TP_recog = confusion_matrix(gt, pred).ravel()
     f1_score = (2*TP_recog) / (2*TP_recog + FP_recog + FN_recog)
     num_samples = len([x for x in gt if x==1])
@@ -157,11 +367,60 @@ def recognition(dataset_name, emotion_class, result, preds, metric_video, final_
     gt_tp_list.extend(cur_tp_gt)
     pred_window_list.extend(cur_pred_window)
     pred_single_list.extend(cur_pred_single)
+    #print('Predict on gt        :', pred_gt_recog)
+    #print('Predicted with single:', cur_pred_single)
+    #print('Predicted with window:', cur_pred_window)
+    print('Predicted with k_p     :', cur_pred)
+    return pred_list, gt_tp_list, pred_window_list, pred_single_list
+
+def recognition2(dataset_name, emotion_class, result, preds, metric_video, final_emotions, subject_count, pred_list, gt_tp_list, y_test, final_samples, pred_window_list, pred_single_list, spot_multiple, k, k_p, final_dataset_spotting):
+    cur_pred = []
+    cur_tp_gt = []
+    pred_gt_recog = []
+    cur_pred_window = []
+    cur_pred_single = []
+    pred_emotion = splitVideo(result, subject_count, final_samples, final_dataset_spotting) #Split predicted emotion by video
+    act_emotion = splitVideo(y_test, subject_count, final_samples, final_dataset_spotting)
+    pred_match_gt = sorted(metric_video.value(iou_thresholds=0.5)[0.5][0]['pred_match_gt'].items())
+    for video_index, video_match in preds: #key=video_index, value=match index for each video
+        for pred_index, sample_index in enumerate(video_match): #pred_index=index of prediction array, sample_index=index of emotion array
+            try:
+                pred_peak = max(0, preds[video_index][pred_index][-1]) #Last index is peak predicted
+                # Case 1: Using peak only
+                pred_emotion_list = argmax(pred_emotion[video_index][pred_peak], axis=-1)
+#                 most_common_emotion, _ = Counter(pred_emotion_list).most_common(1)[0]
+                cur_pred_single.append(pred_emotion_list)
+                
+                # Case 2: Using [peak-k_p, peak]
+                pred_emotion_list = list(argmax(pred_emotion[video_index][max(0, pred_peak-k_p):max(1, pred_peak)], axis=-1))
+                most_common_emotion, _ = Counter(pred_emotion_list).most_common(1)[0]
+                cur_pred.append(most_common_emotion)
+                
+                # Case 3: Using [peak-k_p, peak+k_p]
+                pred_emotion_list = list(argmax(pred_emotion[video_index][max(0, pred_peak-k_p):min(len(pred_emotion[video_index]),pred_peak+k_p)], axis=-1))
+                most_common_emotion, _ = Counter(pred_emotion_list).most_common(1)[0]
+                cur_pred_window.append(most_common_emotion)
+                
+                pred_gt_recog.append(argmax(pred_emotion[video_index][final_samples[subject_count-1][video_index][0][0]])) #Predicted emotion on gt onset label
+                #For predicted tp only
+                gt_label = final_emotions[subject_count-1][video_index][sample_index] #Get video emotion    
+                if(sample_index!=-1):
+                    cur_tp_gt.append(convertLabel(dataset_name, emotion_class, gt_label))
+                else:
+                    cur_tp_gt.append(-1)
+            except Exception as e:
+                print('Recognition Error:', e)
+                pass
+    pred_list.extend(cur_pred)
+    gt_tp_list.extend(cur_tp_gt)
+    pred_window_list.extend(cur_pred_window)
+    pred_single_list.extend(cur_pred_single)
     # print('Predict on gt        :', pred_gt_recog)
     # print('Predicted with single:', cur_pred_single)
     # print('Predicted with window:', cur_pred_window)
     print('Predicted with k_p     :', cur_pred)
     return pred_list, gt_tp_list, pred_window_list, pred_single_list
+
 
 def recognition_evaluation(dataset_name, emotion_class, final_gt, final_pred, show=False):
     if(dataset_name == 'CASME2'):
