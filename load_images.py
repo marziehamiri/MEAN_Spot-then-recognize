@@ -14,32 +14,32 @@ def load_images(dataset_name):
 
   # For dataset CASME_sq
   if(dataset_name == 'CASME_sq'):
-      for i, dir_sub in enumerate(natsort.natsorted(glob.glob(dataset_name + "\\rawpic_crop\\*"))):
-        print('Subject: ' + dir_sub.split('\\')[-1])
-        subjects.append(dir_sub.split('\\')[-1])
+      for i, dir_sub in enumerate(natsort.natsorted(glob.glob(dataset_name + "/rawpic_crop/*"))):
+        print('Subject: ' + dir_sub.split('/')[-1])
+        subjects.append(dir_sub.split('/')[-1])
         subjectsVideos.append([])
-        for dir_sub_vid in natsort.natsorted(glob.glob(dir_sub + "\\*")):
-          subjectsVideos[-1].append(dir_sub_vid.split('\\')[-1].split('_')[1][:4]) # Ex:'CASME_sq/rawpic_aligned/s15/15_0101disgustingteeth' -> '0101' 
+        for dir_sub_vid in natsort.natsorted(glob.glob(dir_sub + "/*")):
+          subjectsVideos[-1].append(dir_sub_vid.split('/')[-1].split('_')[1][:4]) # Ex:'CASME_sq/rawpic_aligned/s15/15_0101disgustingteeth' -> '0101' 
           image = []
-          for dir_sub_vid_img in natsort.natsorted(glob.glob(dir_sub_vid + "\\img*.jpg")):
+          for dir_sub_vid_img in natsort.natsorted(glob.glob(dir_sub_vid + "/img*.jpg")):
             image.append(cv2.imread(dir_sub_vid_img, 0))
-          print('Done -> ' + dir_sub_vid.split('\\')[-1])
+          print('Done -> ' + dir_sub_vid.split('/')[-1])
           images.append(np.array(image))
       
   # For dataset SAMMLV
   elif(dataset_name == 'SAMMLV'):
-      for i, dir_vid in enumerate(natsort.natsorted(glob.glob(dataset_name + "\\SAMM_longvideos_crop\\*"))):
-        subject = dir_vid.split('\\')[-1].split('_')[0]
+      for i, dir_vid in enumerate(natsort.natsorted(glob.glob(dataset_name + "/SAMM_longvideos_crop/*"))):
+        subject = dir_vid.split('/')[-1].split('_')[0]
         if (subject not in subjects): #Only append unique subject name
           subjects.append(subject)
           subjectsVideos.append([])
-        subjectsVideos[-1].append(dir_vid.split('\\')[-1])
+        subjectsVideos[-1].append(dir_vid.split('/')[-1])
 
         image = []
-        for dir_vid_img in natsort.natsorted(glob.glob(dir_vid + "\\*.jpg")):
+        for dir_vid_img in natsort.natsorted(glob.glob(dir_vid + "/*.jpg")):
           image.append(cv2.imread(dir_vid_img, 0))
         image = np.array(image)
-        print('Done -> ' + dir_vid.split('\\')[-1])
+        print('Done -> ' + dir_vid.split('/')[-1])
         images.append(image)
       
   # For dataset CASME2
