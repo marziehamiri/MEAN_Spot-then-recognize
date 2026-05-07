@@ -4,6 +4,6 @@
 ![](https://raw.githubusercontent.com/marziehamiri/MEAN_Spot-then-recognize/main/images/imp.jpg)
 
 
-![spotrecog](https://raw.githubusercontent.com/marziehamiri/MEAN_Spot-then-recognize/main/images/spotrecog.jpg)
+![](https://raw.githubusercontent.com/marziehamiri/MEAN_Spot-then-recognize/main/images/mean.PNG)
 
 ## Overview
