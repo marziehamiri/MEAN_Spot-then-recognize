@@ -36,7 +36,7 @@ This late-fusion approach significantly improves robustness and overall performa
 
 You can download the pretrained model weights from the following link:
 
-
+https://drive.google.com/drive/folders/1OM_z6IMbLzIriHaouQdZLJV36SOh2HUe
 
 ---
 
