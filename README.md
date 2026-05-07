@@ -25,3 +25,19 @@ Accuracy for “other” class increased from 0% → 16%
 Accuracy for “negative” class improved from 53% → 58%
 The model shows reduced semantic errors and balanced predictions across emotion categories.
 This late-fusion approach significantly improves robustness and overall performance compared to single-network baselines.
+---
+
+## Pretrained Weights
+
+You can download the pretrained model weights from the following link:
+
+
+
+---
+
+## Author / Credits
+
+This project is based on the original code by **genbing67**
+Email: [genbing67@gmail.com](mailto:genbing67@gmail.com)
+
+All modifications and enhancements in this repository were made by the current contributor.
